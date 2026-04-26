@@ -121,6 +121,7 @@
         <div class="tab active" onclick="showTab('overview')">Panoramica</div>
         <div class="tab" onclick="showTab('problems')">Per Problema</div>
         <div class="tab" onclick="showTab('products')">Per Prodotto</div>
+        <div class="tab" onclick="showTab('marketplace')">Per Marketplace</div>
         <div class="tab" onclick="showTab('all')">Tutti i Record</div>
       </div>
     </div>
@@ -158,6 +159,19 @@
           <button onclick="clearProductFilter()" style="padding:6px 14px;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;font-size:13px">← Tutte le categorie</button>
         </div>
         <div id="product-table-container"></div>
+      </div>
+    </div>
+
+    <!-- TAB: MARKETPLACE -->
+    <div class="panel" id="tab-marketplace">
+      <div class="cat-grid" id="marketplace-grid"></div>
+      <div id="marketplace-detail" style="display:none">
+        <div class="table-header">
+          <h3 id="marketplace-title"></h3>
+          <button onclick="clearMarketplaceFilter()" style="padding:6px 14px;border:1px solid #e2e8f0;border-radius:8px;background:white;cursor:pointer;font-size:13px">← Tutti i marketplace</button>
+        </div>
+        <div id="marketplace-issue-grid" style="margin-bottom:20px"></div>
+        <div id="marketplace-table-container"></div>
       </div>
     </div>
 
@@ -217,6 +231,14 @@ const ISSUE_LABELS = {
   pacco_non_arrivato:'🚚 Pacco non arrivato', controversia_persa:'⚖️ Controversia persa',
   truffa_generica:'🚨 Truffa', venditore_non_risponde:'🔕 Venditore non risponde',
   pagamento_mancante:'💸 Pagamento mancante', altro:'❓ Altro'
+};
+const MARKET_LABELS = {
+  vinted:'🛍️ Vinted', ebay:'🔨 eBay', depop:'👗 Depop',
+  wallapop:'🐾 Wallapop', subito:'🇮🇹 Subito.it',
+  leboncoin:'🇫🇷 Leboncoin', kleinanzeigen:'🇩🇪 Kleinanzeigen',
+  facebook_marketplace:'📘 Facebook Marketplace',
+  vestiaire:'👑 Vestiaire', back_market:'♻️ Back Market',
+  other:'🌐 Altro / Generico'
 };
 const PROD_LABELS = {
   abbigliamento:'👕 Abbigliamento', scarpe:'👟 Scarpe', borse_accessori:'👜 Borse & Accessori',
@@ -290,6 +312,62 @@ function renderCatGrid(containerId, catMap, labelMap, onClickFn) {
       <div class="cat-pct">${((catMap[k]/total)*100).toFixed(1)}% del totale</div>
     </div>
   `).join('');
+}
+
+// ── MARKETPLACE TAB ──
+let marketplaceFilter = null, marketplaceIssueFilter = null, marketplacePage = 1;
+
+function renderMarketplace() {
+  const markets = count(ALL, 'platform');
+  renderCatGrid('marketplace-grid', markets, MARKET_LABELS, 'filterByMarketplace');
+  document.getElementById('marketplace-grid').style.display = '';
+  document.getElementById('marketplace-detail').style.display = 'none';
+}
+
+function filterByMarketplace(platform) {
+  marketplaceFilter = platform;
+  marketplaceIssueFilter = null;
+  marketplacePage = 1;
+  document.getElementById('marketplace-grid').style.display = 'none';
+  document.getElementById('marketplace-detail').style.display = 'block';
+  document.getElementById('marketplace-title').textContent = MARKET_LABELS[platform] || platform;
+  // Griglia problemi per questo marketplace
+  const subset = ALL.filter(r => (r.platform||'other') === platform);
+  const issues = count(subset, 'issue_type');
+  const total = subset.length;
+  document.getElementById('marketplace-issue-grid').innerHTML =
+    `<div style="margin-bottom:8px;font-size:13px;color:#64748b">${total.toLocaleString()} record totali — clicca un problema per filtrare</div>` +
+    Object.keys(issues).sort((a,b)=>issues[b]-issues[a]).map(k => `
+      <div class="cat-card" onclick="filterMarketplaceByIssue('${k}')" id="miq-${k}">
+        <div class="cat-n">${issues[k]}</div>
+        <div class="cat-l">${ISSUE_LABELS[k]||k}</div>
+        <div class="cat-pct">${((issues[k]/total)*100).toFixed(1)}%</div>
+      </div>`).join('');
+  marketplaceGoPage(1);
+}
+
+function filterMarketplaceByIssue(issue) {
+  marketplaceIssueFilter = issue;
+  marketplacePage = 1;
+  document.querySelectorAll('[id^="miq-"]').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('miq-' + issue);
+  if (el) el.classList.add('active');
+  marketplaceGoPage(1);
+}
+
+function marketplaceGoPage(p) {
+  marketplacePage = p;
+  let subset = ALL.filter(r => (r.platform||'other') === marketplaceFilter);
+  if (marketplaceIssueFilter) subset = subset.filter(r => r.issue_type === marketplaceIssueFilter);
+  makeTable(subset, marketplacePage, PER, 'marketplace-table-container', 'marketplaceGoPage');
+  window.scrollTo({top:200, behavior:'smooth'});
+}
+
+function clearMarketplaceFilter() {
+  marketplaceFilter = null;
+  marketplaceIssueFilter = null;
+  document.getElementById('marketplace-grid').style.display = '';
+  document.getElementById('marketplace-detail').style.display = 'none';
 }
 
 function makeTable(records, page, perPage, containerId, onPageChange) {
@@ -388,7 +466,8 @@ function populateFilters(data) {
 }
 
 function showTab(name) {
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['overview','problems','products','all'][i]===name));
+  const tabs = ['overview','problems','products','marketplace','all'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active', tabs[i]===name));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
 }
@@ -411,6 +490,7 @@ Papa.parse('data/vinted_complaints.csv', {
     const prods = count(ALL,'product_category');
     renderCatGrid('product-grid', prods, PROD_LABELS, 'filterByProduct');
 
+    renderMarketplace();
     populateFilters(ALL);
     renderAll();
 
