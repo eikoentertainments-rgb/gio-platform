@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Melion Data Collector — versione continua
+Vaulteq Data Collector — versione continua
 Salva progressivamente, gira 24/7, si riprende da dove si è fermato
 """
 
@@ -12,6 +12,9 @@ _lock = threading.Lock()  # protegge state e CSV da scritture simultanee
 _cycle_counts = {}        # record aggiunti per fonte nel ciclo corrente
 _existing_counts = {}     # record già presenti nel CSV per fonte (a inizio ciclo)
 SOURCE_HARD_CAP = 1000    # max record totali per fonte (esistenti + nuovi)
+SOURCE_HARD_CAP_OVERRIDE = {  # override per-fonte
+    "google_search": 5000,
+}
 MAX_PER_SOURCE = {        # limite per ciclo per bilanciare le fonti
     "youtube_comment": 600,
     "youtube_video":   150,
@@ -30,6 +33,7 @@ MAX_PER_SOURCE = {        # limite per ciclo per bilanciare le fonti
     "tiktok_search":     400,
     "trustpilot_search": 400,
     "web_article":       150,
+    "google_search":     400,
     "google_news":     300,
     "forum_it":        300,
     "forum_fr":        300,
@@ -349,7 +353,7 @@ _ISSUE_COURIER  = {'pacco_non_arrivato'}  # pesante ma non univoco
 _SOURCE_BUYER_BIAS = {'appstore', 'playstore', 'sitejabber', 'pissedconsumer',
                       'trustpilot', 'trustpilot_search'}
 
-_PRESS_SOURCES = {'google_news', 'web_article'}
+_PRESS_SOURCES = {'google_news', 'web_article', 'google_search'}
 _PRESS_PATTERN = _re_actor.compile(
     # Headline tipico: "Titolo - Domain.com" oppure "Titolo | Pubblicazione"
     r' - [a-z0-9\-\.]+\.(?:com|co\.uk|it|fr|de|es|net|org|news|info)\b'
@@ -732,10 +736,9 @@ def is_valid(text, date, issue=""):
     words = len(text.split())
     if words < MIN_WORDS:
         return False
+    # Strict: rifiuta tutti i record pre-2022 senza eccezioni
     if date and date < MIN_DATE:
-        # Ante-2022: accetta solo se testo lungo e problema preciso
-        if words < PRE22_WORDS or issue == "altro":
-            return False
+        return False
     # Richiedi almeno un segnale negativo — filtra recensioni positive
     if not is_negative(text):
         return False
@@ -745,9 +748,10 @@ def is_valid(text, date, issue=""):
 def add(state, source, username, date, country, rating, issue, text, url=""):
     if not is_valid(text, date, issue):
         return False
-    # Cap totale per fonte: 1000 record (esistenti + nuovi del ciclo)
+    # Cap totale per fonte (override per-fonte se presente, default SOURCE_HARD_CAP)
     total_for_source = _existing_counts.get(source, 0) + _cycle_counts.get(source, 0)
-    if total_for_source >= SOURCE_HARD_CAP:
+    cap_for_source = SOURCE_HARD_CAP_OVERRIDE.get(source, SOURCE_HARD_CAP)
+    if total_for_source >= cap_for_source:
         return False
     limit = MAX_PER_SOURCE.get(source)
     if limit and _cycle_counts.get(source, 0) >= limit:
@@ -778,7 +782,7 @@ def run_reddit(state, config):
     if not config["sources_enabled"].get("reddit"): return
     log("Reddit: avvio")
     sess = requests.Session()
-    sess.headers["User-Agent"] = "MelionResearch/2.0"
+    sess.headers["User-Agent"] = "VaulteqResearch/2.0"
     count = 0
 
     subs = [
@@ -2439,47 +2443,53 @@ _WEB_KEYWORDS = {
         "vinted truffa","vinted falso","vinted pacco vuoto","vinted rimborso negato",
         "vinted truffato","vinted controversia","vinted account bloccato",
         "ebay truffa","ebay falso","ebay non arrivato","ebay rimborso negato",
+        "amazon truffa","amazon venditore truffa","amazon prodotto falso",
         "depop truffa","subito.it truffa","wallapop truffa",
-        "marketplace truffa","facebook marketplace truffa",
+        "facebook marketplace truffa","instagram truffa vendita","instagram shop truffa",
         "vendita online truffa","truffa compravendita","seconda mano truffa",
     ],
     "en": [
         "vinted scam","vinted fake","vinted fraud","vinted not received","vinted empty box",
         "vinted refund denied","vinted seller scam","vinted buyer scam",
         "ebay scam","ebay fake","ebay fraud","ebay refund refused","ebay buyer scam",
+        "amazon scam seller","amazon counterfeit","amazon refund denied",
         "depop scam","depop fake","depop fraud","depop not as described",
-        "facebook marketplace scam","marketplace fraud",
+        "facebook marketplace scam","instagram shop scam","instagram seller scam",
         "online marketplace scam","second hand scam","c2c marketplace fraud",
     ],
     "fr": [
         "vinted arnaque","vinted colis vide","vinted jamais reçu","vinted litige perdu",
         "vinted escroquerie","vinted faux","vinted contrefaçon","vinted remboursement refusé",
         "ebay arnaque","ebay escroquerie","ebay colis vide","ebay contrefaçon",
+        "amazon arnaque vendeur","amazon contrefaçon",
         "leboncoin arnaque","leboncoin escroquerie",
-        "marketplace arnaque","facebook marketplace arnaque",
+        "facebook marketplace arnaque","instagram arnaque vente",
         "achat en ligne arnaque","seconde main arnaque",
     ],
     "de": [
         "vinted betrug","vinted gefälscht","vinted nie angekommen","vinted abzocke",
         "vinted erstattung verweigert","vinted leeres paket","vinted falsch",
         "ebay betrug","ebay gefälscht","ebay erstattung verweigert",
+        "amazon betrug verkäufer","amazon fälschung",
         "kleinanzeigen betrug","kleinanzeigen abzocke","ebay kleinanzeigen betrug",
-        "marketplace betrug","facebook marketplace betrug",
+        "facebook marketplace betrug","instagram betrug verkauf",
         "online kauf betrug","gebraucht kauf betrug",
     ],
     "es": [
         "vinted estafa","vinted falso","vinted nunca llegó","vinted me estafaron",
         "vinted fraude","vinted reembolso denegado",
         "ebay estafa","ebay falso","ebay me estafaron",
+        "amazon estafa vendedor","amazon falsificación",
         "wallapop estafa","wallapop fraude","wallapop falso",
-        "marketplace estafa","facebook marketplace estafa",
+        "facebook marketplace estafa","instagram estafa venta",
         "compra venta estafa","segunda mano estafa",
     ],
     "pl": [
         "vinted oszustwo","vinted podróbka","vinted pusta paczka","vinted nie dotarło",
         "vinted zwrot odmówiony","vinted oszust",
         "ebay oszustwo","ebay podróbka","ebay nie dotarło",
-        "marketplace oszustwo","facebook marketplace oszustwo",
+        "amazon oszustwo sprzedawca","amazon podróbka",
+        "facebook marketplace oszustwo","instagram oszustwo sprzedaż",
         "sprzedaż online oszustwo","zakup używanych oszustwo",
     ],
 }
@@ -2493,6 +2503,82 @@ _LANG_HEADERS = {
     "es": "es-ES,es;q=0.9,en;q=0.5",
     "pl": "pl-PL,pl;q=0.9,en;q=0.5",
 }
+
+# ────────────────────────────────────────
+# FONTE: Google Search via Serper.dev
+# ────────────────────────────────────────
+_GOOGLE_SEARCH_BUDGET = 2000      # query massime totali (sui 2500 free di Serper, margine)
+_GOOGLE_SEARCH_PER_CYCLE = 80     # query per ciclo
+_GOOGLE_SEARCH_RECORD_CAP = 5000  # cap record salvati da questa fonte
+
+def run_google_search(state, config):
+    if not config["sources_enabled"].get("google_search", False): return
+    env = _load_env()
+    api_key = env.get("SERPER_API_KEY", "")
+    if not api_key:
+        log("Google Search: SERPER_API_KEY mancante in .env, skip")
+        return
+
+    state.setdefault("google_search_queries_used", 0)
+    used = state["google_search_queries_used"]
+    if used >= _GOOGLE_SEARCH_BUDGET:
+        log(f"Google Search: budget esaurito ({used}/{_GOOGLE_SEARCH_BUDGET}), skip")
+        return
+
+    already = _existing_counts.get("google_search", 0)
+    if already >= _GOOGLE_SEARCH_RECORD_CAP:
+        log(f"Google Search: cap record {_GOOGLE_SEARCH_RECORD_CAP} raggiunto, skip")
+        return
+
+    log(f"Google Search: avvio (budget rimasto: {_GOOGLE_SEARCH_BUDGET - used} query)")
+
+    # Mix tutte le keyword di tutte le lingue, ordine random
+    all_kws = [(lang, kw) for lang, kws in _WEB_KEYWORDS.items() for kw in kws]
+    random.shuffle(all_kws)
+
+    cycle_q = 0
+    cycle_added = 0
+    for lang, kw in all_kws:
+        if cycle_q >= _GOOGLE_SEARCH_PER_CYCLE: break
+        if state["google_search_queries_used"] >= _GOOGLE_SEARCH_BUDGET: break
+        cc = _LANG_TO_CC[lang]
+        gl = (cc.lower() if cc != "INT" else "us")
+        try:
+            r = requests.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+                json={"q": kw, "num": 10, "gl": gl, "hl": lang},
+                timeout=15,
+            )
+            cycle_q += 1
+            with _lock:
+                state["google_search_queries_used"] = state.get("google_search_queries_used", 0) + 1
+            if r.status_code != 200:
+                log(f"  GoogleSearch '{kw[:40]}': HTTP {r.status_code}")
+                time.sleep(1)
+                continue
+            data = r.json()
+            for item in data.get("organic", []):
+                title = (item.get("title") or "").strip()
+                snippet = (item.get("snippet") or "").strip()
+                url = item.get("link") or ""
+                date = item.get("date") or datetime.now().strftime("%Y-%m-%d")
+                # Normalizza date (Serper a volte usa "X days ago")
+                if not date or "ago" in date.lower():
+                    date = datetime.now().strftime("%Y-%m-%d")
+                txt = f"{title}. {snippet}".strip(". ")
+                if len(txt.split()) < MIN_WORDS: continue
+                if not is_negative(txt): continue
+                issue = classify(txt)
+                if issue == "altro": continue
+                if add(state, "google_search", "search", date, cc, "", issue, txt, url):
+                    cycle_added += 1
+        except Exception as e:
+            log(f"  GoogleSearch '{kw[:40]}': {e}")
+        time.sleep(random.uniform(0.4, 1.2))
+
+    save_state(state)
+    log(f"Google Search: +{cycle_added} record ({cycle_q} query usate; tot budget: {state['google_search_queries_used']}/{_GOOGLE_SEARCH_BUDGET})")
 
 def run_web_articles(state, config):
     if not config["sources_enabled"].get("web_articles", True): return
@@ -2563,7 +2649,7 @@ def run_web_articles(state, config):
 def main():
     init_csv()
     log("="*50)
-    log("MELION COLLECTOR — avvio ciclo continuo")
+    log("VAULTEQ COLLECTOR — avvio ciclo continuo")
     log("="*50)
 
     RECORD_LIMIT = 15_000  # fermati qui finché non aggiustiamo le fonti
@@ -2601,6 +2687,7 @@ def main():
             run_playstore,       # Play Store reviews (google-play-scraper)
             run_search_engines,  # DDG dorking su Facebook/Instagram/TikTok
             run_web_articles,    # Articoli generici da web (6 lingue parallele, cap 600)
+            run_google_search,   # Google Search via Serper.dev (6 lingue, budget 2000 query)
             run_twitter_v2,      # Twitter/X API
             run_forum_it,        # Forum italiani
             run_forum_fr,        # Forum francesi
@@ -2611,8 +2698,25 @@ def main():
         for t in threads: t.start()
         for t in threads: t.join()
 
-        total = count_records()
-        log(f"\n✅ Fine ciclo {cycle} | TOTALE RECORD: {total}")
+        new_total = count_records()
+        added_this_cycle = new_total - total
+        log(f"\n✅ Fine ciclo {cycle} | +{added_this_cycle} record | TOTALE: {new_total}")
+
+        # Velocity-drop early stop: traccia i record/ciclo
+        state.setdefault("cycle_records", [])
+        state["cycle_records"].append(added_this_cycle)
+        save_state(state)
+        cr = state["cycle_records"]
+        if len(cr) >= 5:
+            peak = max(cr[:5])  # picco fissato sui primi 5 cicli
+            if peak > 0:
+                last_two = cr[-2:]
+                threshold = peak / 10
+                if all(r < threshold for r in last_two):
+                    log(f"\n🛑 Velocità crollata: ultimi 2 cicli {last_two} < picco/10 ({threshold:.0f}). Stop preventivo.")
+                    break
+                log(f"   Velocity check: ultimo {cr[-1]} record vs picco {peak} (soglia stop: {threshold:.0f})")
+
         log("Pausa 10 min prima del prossimo ciclo...")
         time.sleep(600)  # 10 minuti tra un ciclo e l'altro
 
