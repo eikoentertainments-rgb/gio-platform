@@ -1,6 +1,16 @@
-.claude/
-collector/
-scraper.py
-vinted_complaints.csv
+# Segreti — mai in git
+.env
+collector/config.json
+
+# Dati locali
 data/collector.log
 data/state.json
+vinted_complaints.csv
+
+# Claude
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+scraper.py

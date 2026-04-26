@@ -1,0 +1,22 @@
+{
+  "output_dir": "/path/to/your/data/folder",
+  "sources_enabled": {
+    "reddit": true,
+    "google_play": false,
+    "app_store": false,
+    "trustpilot": false,
+    "youtube": true,
+    "twitter": true,
+    "pissedconsumer": true,
+    "sitejabber": true,
+    "tiktok": true,
+    "instagram": true,
+    "quora": true,
+    "wykop": true,
+    "gutefrage": true,
+    "forocoches": true,
+    "consumeraffairs": false,
+    "mse": false,
+    "reviewsio": false
+  }
+}
