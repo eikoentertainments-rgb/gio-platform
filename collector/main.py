@@ -41,6 +41,8 @@ def load_config():
     cfg["twitter_bearer_token"]  = os.environ.get("TWITTER_BEARER_TOKEN")  or env.get("TWITTER_BEARER_TOKEN",  "")
     cfg["facebook_cookies"]      = os.environ.get("FACEBOOK_COOKIES")      or env.get("FACEBOOK_COOKIES",      "")
     cfg["trustpilot_api_key"]    = os.environ.get("TRUSTPILOT_API_KEY")    or env.get("TRUSTPILOT_API_KEY",    "")
+    if os.environ.get("OUTPUT_DIR"):
+        cfg["output_dir"] = os.environ["OUTPUT_DIR"]
     return cfg
 
 # ── LOGGING ─────────────────────────────
