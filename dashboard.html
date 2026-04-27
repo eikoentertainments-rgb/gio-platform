@@ -208,6 +208,7 @@
         <div class="tab" onclick="showTab('products')">Per Prodotto</div>
         <div class="tab" onclick="showTab('marketplace')">Per Marketplace</div>
         <div class="tab" onclick="showTab('actors')">Per Attore</div>
+        <div class="tab" onclick="showTab('press')">📰 Stampa</div>
         <div class="tab" onclick="showTab('all')">Tutti i Record</div>
       </div>
     </div>
@@ -279,6 +280,21 @@
         <div id="actor-issue-grid" style="margin-bottom:20px"></div>
         <div id="actor-table-container"></div>
       </div>
+    </div>
+
+    <!-- TAB: STAMPA (articoli giornalistici via google_press) -->
+    <div class="panel" id="tab-press">
+      <div style="background:#fef3c7;padding:14px 18px;border-radius:10px;margin-bottom:18px;font-size:14px;color:#78350f">
+        📰 <strong>Articoli giornalistici</strong> raccolti via Google su testate, blog tematici, polizia, organizzazioni consumatori. Per ogni articolo le 3 frasi più rilevanti sono estratte letteralmente — clicca il titolo per leggere l'originale.
+      </div>
+      <div class="filters">
+        <input type="text" id="press-search" placeholder="Cerca nel testo o nel titolo..." oninput="renderPress()">
+        <select id="press-lang" onchange="renderPress()"><option value="">Tutte le lingue</option></select>
+        <select id="press-issue" onchange="renderPress()"><option value="">Tutti i problemi</option></select>
+        <select id="press-domain" onchange="renderPress()"><option value="">Tutte le testate</option></select>
+      </div>
+      <div id="press-stats" style="margin:14px 0;color:#64748b;font-size:14px"></div>
+      <div id="press-cards"></div>
     </div>
 
     <!-- TAB: TUTTI -->
@@ -611,10 +627,77 @@ function populateFilters(data) {
 }
 
 function showTab(name) {
-  const tabs = ['overview','problems','products','marketplace','actors','all'];
+  const tabs = ['overview','problems','products','marketplace','actors','press','all'];
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active', tabs[i]===name));
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
+  if (name === 'press') renderPress();
+}
+
+// ── PRESS TAB ──
+const COUNTRY_FLAG = {IT:'🇮🇹',FR:'🇫🇷',DE:'🇩🇪',ES:'🇪🇸',PL:'🇵🇱',INT:'🌍',US:'🇺🇸',GB:'🇬🇧'};
+let pressInited = false;
+function _domainOf(url){ try{return new URL(url).hostname.replace(/^www\./,'');}catch(_){return '';} }
+function _parsePressText(text){
+  if (!text) return {title:'', quotes:[]};
+  const sep = text.indexOf(' — ');
+  if (sep < 0) return {title: text, quotes:[]};
+  const title = text.slice(0,sep).trim();
+  const rest = text.slice(sep+3);
+  const quotes = (rest.match(/"([^"]+)"/g) || []).map(q => q.slice(1,-1));
+  return {title, quotes};
+}
+function renderPress() {
+  const press = ALL.filter(r => r.source === 'google_press');
+  if (!pressInited) {
+    const langs = [...new Set(press.map(r=>r.country))].filter(Boolean).sort();
+    const issues = [...new Set(press.map(r=>r.issue_type))].filter(Boolean).sort();
+    const domains = [...new Set(press.map(r=>_domainOf(r.url)))].filter(Boolean).sort();
+    const fillSel = (id, vals, labels) => {
+      const sel = document.getElementById(id);
+      vals.forEach(v => sel.innerHTML += `<option value="${v}">${labels?(labels[v]||v):v}</option>`);
+    };
+    fillSel('press-lang', langs);
+    fillSel('press-issue', issues);
+    fillSel('press-domain', domains);
+    pressInited = true;
+  }
+  const q = document.getElementById('press-search').value.toLowerCase();
+  const fl = document.getElementById('press-lang').value;
+  const fi = document.getElementById('press-issue').value;
+  const fd = document.getElementById('press-domain').value;
+  const filtered = press.filter(r => {
+    if (fl && r.country !== fl) return false;
+    if (fi && r.issue_type !== fi) return false;
+    if (fd && _domainOf(r.url) !== fd) return false;
+    if (q && !(r.text||'').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  document.getElementById('press-stats').textContent =
+    `${filtered.length} articoli · ${[...new Set(filtered.map(r=>_domainOf(r.url)))].length} testate diverse`;
+  const html = filtered.slice(0, 200).map(r => {
+    const {title, quotes} = _parsePressText(r.text);
+    const dom = _domainOf(r.url);
+    const flag = COUNTRY_FLAG[r.country] || '🌍';
+    const qhtml = quotes.length
+      ? quotes.map(q => `<div style="margin:8px 0;padding:10px 14px;border-left:3px solid #cbd5e1;background:#f8fafc;font-style:italic;color:#334155;border-radius:0 8px 8px 0">💬 "${q}"</div>`).join('')
+      : `<div style="color:#94a3b8;font-size:13px;font-style:italic;margin:8px 0">Quote non disponibili (scraping fallito, solo snippet)</div>`;
+    return `
+      <div style="background:white;border-radius:12px;padding:18px 22px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.05);border:1px solid #e2e8f0">
+        <a href="${r.url}" target="_blank" rel="noopener" style="color:#1d4ed8;text-decoration:none;font-weight:600;font-size:16px;line-height:1.4">📰 ${title || '(senza titolo)'}</a>
+        ${qhtml}
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:14px;color:#64748b;font-size:13px">
+          <span>🌐 <strong>${dom}</strong></span>
+          <span>${flag} ${r.country}</span>
+          <span>📅 ${r.date || '—'}</span>
+          <span>🏷️ ${r.issue_type || '—'}</span>
+          ${r.platform && r.platform !== 'other' ? `<span>🛒 ${r.platform}</span>` : ''}
+          <a href="${r.url}" target="_blank" rel="noopener" style="margin-left:auto;color:#2563eb;text-decoration:none">🔗 Leggi articolo →</a>
+        </div>
+      </div>`;
+  }).join('');
+  document.getElementById('press-cards').innerHTML = html ||
+    '<div style="padding:40px;text-align:center;color:#94a3b8">Nessun articolo trovato. Il collector sta ancora raccogliendo i primi record.</div>';
 }
 
 // ── ACTORS TAB ──

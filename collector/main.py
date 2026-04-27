@@ -14,6 +14,7 @@ _existing_counts = {}     # record già presenti nel CSV per fonte (a inizio cic
 SOURCE_HARD_CAP = 1000    # max record totali per fonte (esistenti + nuovi)
 SOURCE_HARD_CAP_OVERRIDE = {  # override per-fonte
     "google_search": 5000,
+    "google_press":  5000,
 }
 MAX_PER_SOURCE = {        # limite per ciclo per bilanciare le fonti
     "youtube_comment": 600,
@@ -34,6 +35,7 @@ MAX_PER_SOURCE = {        # limite per ciclo per bilanciare le fonti
     "trustpilot_search": 400,
     "web_article":       150,
     "google_search":     400,
+    "google_press":      500,
     "google_news":     300,
     "forum_it":        300,
     "forum_fr":        300,
@@ -87,18 +89,27 @@ def log(msg):
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as f:
-            return json.load(f)
-    return {"seen_ids": [], "reddit_after": {}, "gplay_done": [], "appstore_done": []}
+            s = json.load(f)
+            s["seen_ids"] = set(s.get("seen_ids", []))  # converte lista → set
+            return s
+    return {"seen_ids": set(), "reddit_after": {}, "gplay_done": [], "appstore_done": []}
 
 def save_state(state):
     with _lock:
         if len(state["seen_ids"]) > 50000:
-            state["seen_ids"] = state["seen_ids"][-50000:]
+            state["seen_ids"] = set(list(state["seen_ids"])[-50000:])
         with open(STATE_FILE, "w") as f:
-            json.dump(state, f)
+            json.dump({**state, "seen_ids": list(state["seen_ids"])}, f)
 
 MIN_WORDS   = 10
-MIN_DATE    = "2022-01-01"   # post 2022+; ante-2022 accettati solo se >= 50 parole e issue != altro
+def _compute_min_date():
+    """Soglia minima data record: ultimi 18 mesi, calcolata all'avvio del collector."""
+    t = datetime.now()
+    y, m = t.year, t.month - 18
+    while m <= 0:
+        m += 12; y -= 1
+    return f"{y:04d}-{m:02d}-01"
+MIN_DATE    = _compute_min_date()   # ultimi 18 mesi; record più vecchi vengono scartati
 PRE22_WORDS = 50
 
 # ── CSV WRITER (append progressivo) ─────
@@ -353,7 +364,7 @@ _ISSUE_COURIER  = {'pacco_non_arrivato'}  # pesante ma non univoco
 _SOURCE_BUYER_BIAS = {'appstore', 'playstore', 'sitejabber', 'pissedconsumer',
                       'trustpilot', 'trustpilot_search'}
 
-_PRESS_SOURCES = {'google_news', 'web_article', 'google_search'}
+_PRESS_SOURCES = {'google_news', 'web_article', 'google_search', 'google_press'}
 _PRESS_PATTERN = _re_actor.compile(
     # Headline tipico: "Titolo - Domain.com" oppure "Titolo | Pubblicazione"
     r' - [a-z0-9\-\.]+\.(?:com|co\.uk|it|fr|de|es|net|org|news|info)\b'
@@ -760,7 +771,7 @@ def add(state, source, username, date, country, rating, issue, text, url=""):
     with _lock:
         if uid in state["seen_ids"]:
             return False
-        state["seen_ids"].append(uid)
+        state["seen_ids"].add(uid)
         _cycle_counts[source] = _cycle_counts.get(source, 0) + 1
         record = {
             "source": source, "username": username[:80], "date": date,
@@ -926,7 +937,8 @@ def run_reddit(state, config):
                            f"https://reddit.com{d.get('permalink','')}"):
                         count += 1
             time.sleep(random.uniform(1,2))
-        except: pass
+        except Exception as e:
+            log(f"  Reddit '{kw[:40]}': {e}")
 
     log(f"Reddit: +{count} nuovi record")
 
@@ -1018,38 +1030,38 @@ def run_pissedconsumer(state, config):
     headers = {"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
     pc_sites = ["vinted","ebay","depop","wallapop","subito"]
     for site in pc_sites:
-     for page in range(1,51):
-        try:
-            url = f"https://{site}.pissedconsumer.com/review.html?page={page}"
-            r = requests.get(url, headers=headers, timeout=15)
-            if r.status_code != 200: break
-            soup = BeautifulSoup(r.text,"lxml")
-            reviews = soup.find_all("article") or soup.find_all(class_=lambda c: c and "review" in c.lower())
-            found = 0
-            for rev in reviews:
-                txt_el = rev.find(class_=lambda c: c and "text" in c.lower()) or rev.find("p")
-                txt = txt_el.get_text(separator=" ",strip=True) if txt_el else rev.get_text(separator=" ",strip=True)
-                if len(txt.split()) < MIN_WORDS: continue
-                # Estrai data reale
-                date_el = rev.find("time") or rev.find(class_=lambda c: c and "date" in (c or "").lower())
-                if date_el:
-                    date_str = date_el.get("datetime","") or date_el.get_text(strip=True)
-                    date = date_str[:10] if len(date_str) >= 10 else datetime.now().strftime("%Y-%m-%d")
-                else:
-                    date = datetime.now().strftime("%Y-%m-%d")
-                # Estrai autore
-                author_el = rev.find(class_=lambda c: c and "author" in (c or "").lower())
-                author = author_el.get_text(strip=True)[:80] if author_el else "anon"
-                issue = classify(txt)
-                if issue == "altro": continue
-                if add(state,"pissedconsumer",author,date,"US","",issue,txt,url):
-                    count += 1
-                    found += 1
-            if found == 0: break
-            time.sleep(random.uniform(1,2))
-        except Exception as e:
-            log(f"  PissedConsumer {site} p{page} err: {e}")
-            break
+        for page in range(1,51):
+            try:
+                url = f"https://{site}.pissedconsumer.com/review.html?page={page}"
+                r = requests.get(url, headers=headers, timeout=15)
+                if r.status_code != 200: break
+                soup = BeautifulSoup(r.text,"lxml")
+                reviews = soup.find_all("article") or soup.find_all(class_=lambda c: c and "review" in c.lower())
+                found = 0
+                for rev in reviews:
+                    txt_el = rev.find(class_=lambda c: c and "text" in c.lower()) or rev.find("p")
+                    txt = txt_el.get_text(separator=" ",strip=True) if txt_el else rev.get_text(separator=" ",strip=True)
+                    if len(txt.split()) < MIN_WORDS: continue
+                    # Estrai data reale
+                    date_el = rev.find("time") or rev.find(class_=lambda c: c and "date" in (c or "").lower())
+                    if date_el:
+                        date_str = date_el.get("datetime","") or date_el.get_text(strip=True)
+                        date = date_str[:10] if len(date_str) >= 10 else datetime.now().strftime("%Y-%m-%d")
+                    else:
+                        date = datetime.now().strftime("%Y-%m-%d")
+                    # Estrai autore
+                    author_el = rev.find(class_=lambda c: c and "author" in (c or "").lower())
+                    author = author_el.get_text(strip=True)[:80] if author_el else "anon"
+                    issue = classify(txt)
+                    if issue == "altro": continue
+                    if add(state,"pissedconsumer",author,date,"US","",issue,txt,url):
+                        count += 1
+                        found += 1
+                if found == 0: break
+                time.sleep(random.uniform(1,2))
+            except Exception as e:
+                log(f"  PissedConsumer {site} p{page} err: {e}")
+                break
     log(f"PissedConsumer: +{count} nuovi record")
 
 # ────────────────────────────────────────
@@ -2508,8 +2520,86 @@ _LANG_HEADERS = {
 # FONTE: Google Search via Serper.dev
 # ────────────────────────────────────────
 _GOOGLE_SEARCH_BUDGET = 2000      # query massime totali (sui 2500 free di Serper, margine)
-_GOOGLE_SEARCH_PER_CYCLE = 80     # query per ciclo
+_GOOGLE_SEARCH_PER_CYCLE = 60     # query per ciclo (ridotto perché ogni risultato fa scraping ~3s)
 _GOOGLE_SEARCH_RECORD_CAP = 5000  # cap record salvati da questa fonte
+
+# Esclusioni Google: niente social, forum marketplace, marketplace, recensioni — solo giornalismo/blog
+_GOOGLE_SEARCH_EXCLUDE = (
+    " -site:reddit.com -site:facebook.com -site:youtube.com -site:tiktok.com"
+    " -site:instagram.com -site:twitter.com -site:x.com -site:quora.com -site:wykop.pl"
+    " -site:vinted.com -site:vinted.it -site:vinted.fr -site:vinted.de -site:vinted.es"
+    " -site:ebay.com -site:ebay.it -site:ebay.fr -site:ebay.de -site:ebay.es"
+    " -site:community.ebay.com -site:community.ebay.it -site:communaute.ebay.fr -site:comunidad.ebay.es"
+    " -site:amazon.com -site:amazon.it -site:amazon.de -site:amazon.fr -site:amazon.es"
+    " -site:trustpilot.com -site:sitejabber.com -site:pissedconsumer.com"
+)
+
+# Keyword per scoring frasi (estrazione frasi più rilevanti dall'articolo)
+_QUOTE_KEYWORDS = [
+    # Truffa (6 lingue)
+    "truffa","truffato","scam","scammed","fraud","arnaque","escroquerie","betrug","abzocke",
+    "estafa","estafaron","fraude","oszustwo","oszust",
+    # Falso/fake
+    "falso","contraffatto","fake","counterfeit","contrefaçon","faux","gefälscht","fälschung",
+    "falsificación","podróbka",
+    # Pacco/spedizione
+    "pacco vuoto","empty box","colis vide","leeres paket","paquete vacío","pusta paczka",
+    "non arrivato","not received","jamais reçu","nie angekommen","nunca llegó","nie dotarło",
+    # Rimborso/dispute
+    "rimborso","refund","remboursement","erstattung","reembolso","zwrot",
+    "controversia","dispute","litige","streit","disputa","spór",
+    # Marketplace
+    "vinted","ebay","amazon","depop","wallapop","subito","leboncoin","kleinanzeigen",
+    "marketplace","facebook marketplace","instagram",
+    # Vittime/protagonisti
+    "vittima","victim","victime","opfer","víctima","ofiara",
+    "compratore","buyer","acheteur","käufer","comprador","kupujący",
+    "venditore","seller","vendeur","verkäufer","vendedor","sprzedawca",
+]
+_QUOTE_KEYWORDS_LOWER = [k.lower() for k in _QUOTE_KEYWORDS]
+
+def _scrape_article(url, timeout=8):
+    """Scarica HTML, estrae testo pulito dall'articolo. Ritorna None se fallisce."""
+    try:
+        ua = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+              "AppleWebKit/537.36 (KHTML, like Gecko) "
+              "Chrome/122.0.0.0 Safari/537.36")
+        r = requests.get(url, headers={"User-Agent": ua, "Accept-Language": "en,it,fr,de,es;q=0.7"},
+                         timeout=timeout, allow_redirects=True)
+        if r.status_code != 200: return None
+        ctype = r.headers.get("content-type","").lower()
+        if "html" not in ctype: return None
+        soup = BeautifulSoup(r.content, "html.parser")
+        # Rimuovi elementi non-contenuto
+        for tag in soup(["script","style","nav","header","footer","aside","iframe","noscript","form"]):
+            tag.decompose()
+        # Cerca container principale
+        article = soup.find("article") or soup.find("main") or soup.body
+        if not article: return None
+        text = article.get_text(separator=" ", strip=True)
+        text = " ".join(text.split())  # collassa spazi multipli
+        return text if len(text) > 200 else None
+    except Exception:
+        return None
+
+def _extract_key_sentences(text, n=3):
+    """Estrae le N frasi più dense di keyword, mantenendo ordine cronologico originale."""
+    import re as _re
+    sentences = _re.split(r'(?<=[.!?])\s+(?=[A-ZÀ-Ü])', text)
+    scored = []
+    for idx, s in enumerate(sentences):
+        s = s.strip()
+        wc = len(s.split())
+        if wc < 8 or wc > 50: continue
+        sl = s.lower()
+        score = sum(1 for k in _QUOTE_KEYWORDS_LOWER if k in sl)
+        if score > 0:
+            scored.append((score, idx, s))
+    if not scored: return []
+    # Top N per score, poi riordina per posizione originale
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    top = sorted(scored[:n], key=lambda x: x[1])
+    return [s for _,_,s in top]
 
 def run_google_search(state, config):
     if not config["sources_enabled"].get("google_search", False): return
@@ -2525,12 +2615,12 @@ def run_google_search(state, config):
         log(f"Google Search: budget esaurito ({used}/{_GOOGLE_SEARCH_BUDGET}), skip")
         return
 
-    already = _existing_counts.get("google_search", 0)
+    already = _existing_counts.get("google_press", 0)
     if already >= _GOOGLE_SEARCH_RECORD_CAP:
-        log(f"Google Search: cap record {_GOOGLE_SEARCH_RECORD_CAP} raggiunto, skip")
+        log(f"Google Press: cap record {_GOOGLE_SEARCH_RECORD_CAP} raggiunto, skip")
         return
 
-    log(f"Google Search: avvio (budget rimasto: {_GOOGLE_SEARCH_BUDGET - used} query)")
+    log(f"Google Press: avvio (budget rimasto: {_GOOGLE_SEARCH_BUDGET - used} query)")
 
     # Mix tutte le keyword di tutte le lingue, ordine random
     all_kws = [(lang, kw) for lang, kws in _WEB_KEYWORDS.items() for kw in kws]
@@ -2544,10 +2634,12 @@ def run_google_search(state, config):
         cc = _LANG_TO_CC[lang]
         gl = (cc.lower() if cc != "INT" else "us")
         try:
+            # Aggiungi esclusioni Google operator alla query (solo giornalismo, no social/forum/marketplace)
+            full_q = kw + _GOOGLE_SEARCH_EXCLUDE
             r = requests.post(
                 "https://google.serper.dev/search",
                 headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
-                json={"q": kw, "num": 10, "gl": gl, "hl": lang},
+                json={"q": full_q, "num": 10, "gl": gl, "hl": lang},
                 timeout=15,
             )
             cycle_q += 1
@@ -2563,22 +2655,40 @@ def run_google_search(state, config):
                 snippet = (item.get("snippet") or "").strip()
                 url = item.get("link") or ""
                 date = item.get("date") or datetime.now().strftime("%Y-%m-%d")
-                # Normalizza date (Serper a volte usa "X days ago")
                 if not date or "ago" in date.lower():
                     date = datetime.now().strftime("%Y-%m-%d")
-                txt = f"{title}. {snippet}".strip(". ")
+                if not url or not title: continue
+
+                # Scrape articolo + estrai 3 frasi chiave
+                article_text = _scrape_article(url)
+                if article_text:
+                    quotes = _extract_key_sentences(article_text, n=3)
+                    if quotes:
+                        # Concatena con virgolette: titolo — "Q1" "Q2" "Q3"
+                        joined = ' '.join(f'"{q}"' for q in quotes)
+                        txt = f'{title} — {joined}'
+                        # Re-classifica issue dal contenuto pieno (più accurato)
+                        issue = classify(article_text[:3000])
+                    else:
+                        txt = f"{title}. {snippet}"
+                        issue = classify(txt)
+                else:
+                    # Fallback allo snippet di Serper se scrape fallisce
+                    txt = f"{title}. {snippet}"
+                    issue = classify(txt)
+
+                txt = txt.strip(". ")
                 if len(txt.split()) < MIN_WORDS: continue
                 if not is_negative(txt): continue
-                issue = classify(txt)
                 if issue == "altro": continue
-                if add(state, "google_search", "search", date, cc, "", issue, txt, url):
+                if add(state, "google_press", "press", date, cc, "", issue, txt, url):
                     cycle_added += 1
         except Exception as e:
             log(f"  GoogleSearch '{kw[:40]}': {e}")
         time.sleep(random.uniform(0.4, 1.2))
 
     save_state(state)
-    log(f"Google Search: +{cycle_added} record ({cycle_q} query usate; tot budget: {state['google_search_queries_used']}/{_GOOGLE_SEARCH_BUDGET})")
+    log(f"Google Press: +{cycle_added} record ({cycle_q} query usate; tot budget: {state['google_search_queries_used']}/{_GOOGLE_SEARCH_BUDGET})")
 
 def run_web_articles(state, config):
     if not config["sources_enabled"].get("web_articles", True): return
@@ -2652,7 +2762,7 @@ def main():
     log("VAULTEQ COLLECTOR — avvio ciclo continuo")
     log("="*50)
 
-    RECORD_LIMIT = 15_000  # fermati qui finché non aggiustiamo le fonti
+    RECORD_LIMIT = 11_500  # target totale CSV
 
     cycle = 0
     while True:
@@ -2699,7 +2809,9 @@ def main():
         for t in threads: t.join()
 
         new_total = count_records()
-        added_this_cycle = new_total - total
+        # Usa _cycle_counts (contatore reale di add() andate a buon fine) invece della
+        # diff sul file, che può sbagliare per record multi-line o concorrenza
+        added_this_cycle = sum(_cycle_counts.values())
         log(f"\n✅ Fine ciclo {cycle} | +{added_this_cycle} record | TOTALE: {new_total}")
 
         # Velocity-drop early stop: traccia i record/ciclo
