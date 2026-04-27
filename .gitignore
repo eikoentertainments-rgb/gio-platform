@@ -1,16 +1,17 @@
-# Segreti — mai in git
-.env
-collector/config.json
+# macOS
+.DS_Store
 
-# Dati locali
-data/collector.log
-data/state.json
-vinted_complaints.csv
+# Backup automatici dei dati
+data/*backup*
+data/*_backup_*
 
-# Claude
-.claude/
-
-# Python
+# Cache Python
 __pycache__/
 *.pyc
-scraper.py
+
+# Variabili d'ambiente (api keys)
+.env
+.env.local
+
+# Log
+*.log
