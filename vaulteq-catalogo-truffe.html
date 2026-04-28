@@ -119,6 +119,24 @@ details.truffa[open] .accordion-arrow{transform:rotate(180deg);color:var(--green
   color:var(--text2);font-size:.95rem;line-height:1.7;
 }
 
+/* ── SECTION HEADERS ── */
+.section-title{
+  font-size:clamp(1.35rem,3vw,1.7rem);font-weight:800;letter-spacing:-0.02em;
+  margin:54px 0 14px;line-height:1.2;
+  padding-bottom:12px;border-bottom:2px solid var(--text);
+}
+.section-title:first-of-type{margin-top:0}
+.section-note{
+  color:var(--text3);font-size:.88rem;font-style:italic;
+  margin-bottom:20px;line-height:1.5;
+}
+.section-empty{
+  background:var(--bg2);border:1px dashed var(--border);
+  border-radius:var(--radius);
+  padding:22px;text-align:center;
+  color:var(--text3);font-size:.9rem;
+}
+
 /* ── FOOTER ── */
 footer{
   text-align:center;padding:30px 24px;background:var(--bg2);border-top:1px solid var(--border);
@@ -154,12 +172,100 @@ footer a:hover{color:var(--green)}
 
 <article>
   <div class="wrap">
-    <p class="section-intro">In ordine di apparizione, dalla più comune alla più rara. Clicca su una voce per leggere il modus operandi.</p>
+    <p class="section-intro">Ogni schema è descritto in circa 100 parole. Quando lo stesso modus operandi cambia esito a seconda delle prove disponibili, viene presentato in due varianti.</p>
+
+    <h2 class="section-title">🛍 Truffe del venditore</h2>
 
     <div class="truffe-accordion">
-      <!-- TRUFFE: aggiungere qui sotto, una per ogni <details> -->
+
+      <details class="truffa">
+        <summary>
+          <div class="truffa-num">1</div>
+          <div class="truffa-title">Bait-and-switch — senza prove</div>
+          <span class="accordion-arrow">▾</span>
+        </summary>
+        <div class="truffa-body">
+          Il venditore mette in vendita un oggetto reale, con foto autentiche del prodotto, ma nel pacco infila qualcosa di completamente diverso — più economico, difettoso, o addirittura un mattone. Il compratore apre, scopre la sostituzione e apre una disputa. Nessuno dei due ha video del momento dell'imballaggio o dell'apertura. È parola contro parola: il venditore giura di aver spedito il prodotto giusto, il compratore giura il contrario. La piattaforma decide sulla base della credibilità apparente, e spesso il truffatore esperto vince. Senza prove oggettive del contenuto reale, la disputa non ha soluzione equa: chi mente meglio prevale.
+        </div>
+      </details>
+
+      <details class="truffa">
+        <summary>
+          <div class="truffa-num">2</div>
+          <div class="truffa-title">Bait-and-switch — con prove manomesse</div>
+          <span class="accordion-arrow">▾</span>
+        </summary>
+        <div class="truffa-body">
+          Il venditore registra accuratamente il video dell'imballaggio mostrando l'oggetto reale, sigilla il pacco davanti alla telecamera, scatta foto. Sembra un venditore onesto e tutelato. In realtà, terminata la registrazione, riapre il pacco, sostituisce il contenuto con un oggetto diverso o falso, lo rispedisce. Il compratore riceve la merce sbagliata e apre disputa. Il venditore presenta il video come prova: il giudice vede un imballaggio impeccabile e tende a credergli. È la truffa più sofisticata e difficile da smascherare: usa le prove stesse contro la vittima. Spesso il venditore vince anche quando dice il falso.
+        </div>
+      </details>
+
+      <details class="truffa">
+        <summary>
+          <div class="truffa-num">3</div>
+          <div class="truffa-title">Oggetto dichiarato funzionante ma rotto — parola contro parola</div>
+          <span class="accordion-arrow">▾</span>
+        </summary>
+        <div class="truffa-body">
+          Il venditore offre un oggetto tecnologico (smartphone, console, elettrodomestico) dichiarandolo funzionante. Per rafforzare la trattativa allega una foto del prodotto acceso — magari ripresa da internet, oppure dell'ultimo momento in cui ha funzionato davvero. Il compratore riceve, prova ad accenderlo, scopre che è guasto. Apre disputa. Entrambi hanno qualcosa in mano: il venditore la foto "funzionante", il compratore il video del prodotto morto. È parola contro parola con prove contraddittorie. La piattaforma non sa quale credere — la foto poteva essere autentica al momento dello scatto, e il prodotto guastarsi in transito. Risultato: dispute lunghe, indecidibili, vince chi insiste di più.
+        </div>
+      </details>
+
+      <details class="truffa">
+        <summary>
+          <div class="truffa-num">4</div>
+          <div class="truffa-title">Oggetto vero in foto, falso nel pacco</div>
+          <span class="accordion-arrow">▾</span>
+        </summary>
+        <div class="truffa-body">
+          Il venditore mostra in foto un oggetto autentico (sneaker griffate, borsa di lusso, console originale) — che possiede davvero, o solo come immagine. Eventualmente registra anche il video dell'imballaggio del prodotto vero. Poi, prima di chiudere il pacco o subito dopo, sostituisce il contenuto con una copia contraffatta. Il compratore riceve il fake e apre disputa allegando foto del prodotto contraffatto. Il venditore presenta foto del prodotto autentico. Senza testimoni dell'effettivo contenuto spedito, è parola contro parola. La piattaforma decide secondo la propria policy: alcune assistenze tutelano il compratore, altre il venditore esperto con storico positivo. L'esito è imprevedibile.
+        </div>
+      </details>
 
     </div>
+
+    <h2 class="section-title">📦 Incidenti / dispute da corriere</h2>
+    <p class="section-note">Non sono truffe in senso stretto, ma generano dispute identiche e lo stesso danno economico — e aprono la porta a falsi reclami "approfittatori".</p>
+
+    <div class="truffe-accordion">
+
+      <details class="truffa">
+        <summary>
+          <div class="truffa-num">5</div>
+          <div class="truffa-title">Pacco perso</div>
+          <span class="accordion-arrow">▾</span>
+        </summary>
+        <div class="truffa-body">
+          Il pacco non arriva mai a destinazione: smarrito dal corriere, rubato in magazzino, consegnato all'indirizzo sbagliato. Il venditore aveva foto e video dell'imballaggio, dimostra di aver spedito davvero. Il compratore non ha ricevuto nulla. Nessuno dei due è responsabile, eppure entrambi reclamano. La piattaforma deve decidere: lasciare il compratore senza soldi e senza prodotto, o lasciare il venditore senza soldi dopo aver spedito. Per non perdere clienti, di solito rimborsa entrambi di tasca propria. Tecnicamente non è una truffa, ma genera lo stesso danno economico — e apre la porta a falsi smarrimenti dichiarati dal compratore.
+        </div>
+      </details>
+
+      <details class="truffa">
+        <summary>
+          <div class="truffa-num">6</div>
+          <div class="truffa-title">Pacco danneggiato — venditore senza prove</div>
+          <span class="accordion-arrow">▾</span>
+        </summary>
+        <div class="truffa-body">
+          Il pacco subisce danni in transito: cade, viene schiacciato, arriva ammaccato. Il compratore apre, fotografa il danno, segnala. Il venditore non ha registrato nulla all'imballaggio: non può dimostrare che il prodotto fosse integro alla partenza. Nasce il sospetto: l'oggetto era già danneggiato e il venditore l'ha taciuto? Era integro e il corriere l'ha rovinato? Senza prove iniziali è impossibile saperlo. La piattaforma, per non perdere fiducia, di solito rimborsa entrambi di tasca propria, ma il venditore resta segnato come "potenzialmente disonesto" anche se è incolpevole. La mancanza di prove penalizza chi ha agito in buona fede.
+        </div>
+      </details>
+
+      <details class="truffa">
+        <summary>
+          <div class="truffa-num">7</div>
+          <div class="truffa-title">Pacco danneggiato — venditore con prove</div>
+          <span class="accordion-arrow">▾</span>
+        </summary>
+        <div class="truffa-body">
+          Il pacco arriva danneggiato. Il venditore ha registrato il video dell'imballaggio, fotografato il prodotto integro, documentato la consegna al corriere. È evidente che il danno è avvenuto durante il trasporto. Il compratore allega foto del danno. Hanno ragione entrambi: la merce è arrivata rotta, ma il venditore non ne è responsabile. La colpa è del corriere, che dovrebbe rimborsare via assicurazione — ma in pratica i corrieri scaricano la pratica con tempi lunghi e rimborsi incerti. La piattaforma, per non perdere clienti, anticipa di tasca propria. Il danno economico c'è, anche senza alcun truffatore.
+        </div>
+      </details>
+
+    </div>
+
+    <h2 class="section-title">🛒 Truffe del compratore</h2>
+    <div class="section-empty">Sezione in compilazione — gli schemi (es. falso "non ricevuto", falsa segnalazione di danno, chargeback fraudolento) verranno popolati a breve.</div>
   </div>
 </article>
 
