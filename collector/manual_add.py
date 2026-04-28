@@ -4,7 +4,7 @@ import sys, os, csv, json, hashlib
 sys.path.insert(0, os.path.dirname(__file__))
 from datetime import datetime
 
-BASE = "/Users/gioooo2/gio-platform"
+BASE = "/Users/gioooo2/vaulteq"
 OUTPUT = f"{BASE}/data/vinted_complaints.csv"
 
 # Importa funzioni dal main per coerenza

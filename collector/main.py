@@ -42,7 +42,7 @@ MAX_PER_SOURCE = {        # limite per ciclo per bilanciare le fonti
     "forum_de":        300,
 }
 
-BASE = "/Users/gioooo2/gio-platform"
+BASE = "/Users/gioooo2/vaulteq"
 DATA_DIR = f"{BASE}/data"
 OUTPUT = f"{DATA_DIR}/vinted_complaints.csv"
 STATE_FILE = f"{DATA_DIR}/state.json"
